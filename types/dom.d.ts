@@ -18,8 +18,15 @@ declare global {
         silent: boolean;
         device: MediaDeviceInfo;
         eventTarget: EventTarget;
+        customStream?: MediaStream;
     }
     type EmulatedDeviceMeta = Record<string, EmulatedDeviceMetaProps | undefined>;
+    interface EmulatedDeviceOptions {
+        deviceId?: string;
+        label?: string;
+        groupId?: string;
+        stream?: MediaStream;
+    }
     interface MediaDevices {
         meta?: EmulatedDeviceMeta;
         emulatedAudioDeviceCapabilities: MediaTrackCapabilities;
@@ -27,9 +34,9 @@ declare global {
         removeEmulatedDevice(emulatorDeviceId: string): boolean;
         silenceDevice(emulatorDeviceId: string, silent: boolean): boolean;
         failDevice(emulatorDeviceId: string, fail: boolean): boolean;
-        addEmulatedDevice(kind: 'audiooutput'): string;
-        addEmulatedDevice(kind: 'audioinput', capabilities?: EmulatedAudioDeviceCapabilities): string;
-        addEmulatedDevice(kind: 'videoinput', capabilities?: EmulatedVideoDeviceCapabilities): string;
+        addEmulatedDevice(kind: 'audiooutput', capabilities?: undefined, options?: EmulatedDeviceOptions): string;
+        addEmulatedDevice(kind: 'audioinput', capabilities?: EmulatedAudioDeviceCapabilities, options?: EmulatedDeviceOptions): string;
+        addEmulatedDevice(kind: 'videoinput', capabilities?: EmulatedVideoDeviceCapabilities, options?: EmulatedDeviceOptions): string;
     }
     interface InputDeviceInfo {
         getCapabilities(): MediaTrackCapabilities;

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Stream Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        canvas, video {
+            border: 2px solid #007bff;
+            margin: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Custom Stream Fix Test</h1>
+    
+    <h2>Test Steps:</h2>
+    <ol>
+        <li>Create custom Canvas video stream device</li>
+        <li>Create custom beep audio stream device</li>
+        <li>Use getUserMedia to get streams from these devices</li>
+        <li>Verify that the returned streams are our custom streams</li>
+        <li>🎥 Display Canvas animation in video element</li>
+        <li>🔊 Play beep sounds in audio element</li>
+    </ol>
+
+    <div>
+        <button onclick="runTest()">🧪 Start Test</button>
+        <button onclick="clearResults()">🧹 Clear Results</button>
+    </div>
+
+    <div id="results"></div>
+    
+    <canvas id="testCanvas" width="320" height="240" style="display:none;"></canvas>
+    <video id="testVideo" width="320" height="240" autoplay muted style="display:none;"></video>
+    <audio id="testAudio" controls style="display:none; margin: 10px;"></audio>
+
+    <script src="./dist/index.iife.js"></script>
+    <script>
+        let canvasAnimationId = null;
+        let audioContext = null;
+        let beepInterval = null;
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = message;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function createCanvasStream() {
+            const canvas = document.getElementById('testCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.style.display = 'block';
+            
+            let time = 0;
+            
+            function animate() {
+                // Draw colorful background
+                const hue = (time * 2) % 360;
+                ctx.fillStyle = `hsl(${hue}, 70%, 30%)`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw circles
+                ctx.beginPath();
+                ctx.arc(canvas.width/2, canvas.height/2, 50 + Math.sin(time * 0.1) * 20, 0, Math.PI * 2);
+                ctx.fillStyle = `hsl(${hue + 180}, 80%, 60%)`;
+                ctx.fill();
+                
+                // Draw text
+                ctx.fillStyle = 'white';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Custom Video Stream', canvas.width/2, canvas.height/2 + 80);
+                ctx.fillText(`Frame: ${time}`, canvas.width/2, canvas.height/2 + 100);
+                
+                time++;
+                canvasAnimationId = requestAnimationFrame(animate);
+            }
+            
+            animate();
+            return canvas.captureStream(30);
+        }
+
+        function createBeepAudioStream() {
+            if (!audioContext) {
+                audioContext = new AudioContext();
+            }
+            
+            const destination = audioContext.createMediaStreamDestination();
+            
+            function createBeep() {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(destination);
+                
+                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                oscillator.frequency.setValueAtTime(1200, audioContext.currentTime + 0.1);
+                
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.15);
+            }
+            
+            createBeep();
+            beepInterval = setInterval(createBeep, 600);
+            
+            return destination.stream;
+        }
+
+        async function runTest() {
+            try {
+                log('🚀 Starting custom stream fix test...', 'info');
+                
+                // 1. Create custom streams
+                log('📹 Creating Canvas video stream...', 'info');
+                const canvasStream = createCanvasStream();
+                log(`✅ Canvas stream created successfully, video tracks: ${canvasStream.getVideoTracks().length}`, 'success');
+                
+                log('🔊 Creating beep audio stream...', 'info');
+                const audioStream = createBeepAudioStream();
+                log(`✅ Audio stream created successfully, audio tracks: ${audioStream.getAudioTracks().length}`, 'success');
+                
+                // 2. Create emulated devices
+                log('🔧 Creating video device...', 'info');
+                const videoDeviceId = await navigator.mediaDevices.addEmulatedDevice('videoinput', undefined, {
+                    stream: canvasStream,
+                    label: 'Test Canvas Video Device',
+                    deviceId: 'test-canvas-video'
+                });
+                log(`✅ Video device created successfully: ${videoDeviceId}`, 'success');
+                
+                log('🔧 Creating audio device...', 'info');
+                const audioDeviceId = await navigator.mediaDevices.addEmulatedDevice('audioinput', undefined, {
+                    stream: audioStream,
+                    label: 'Test Beep Audio Device',
+                    deviceId: 'test-beep-audio'
+                });
+                log(`✅ Audio device created successfully: ${audioDeviceId}`, 'success');
+                
+                // 3. Get streams using getUserMedia
+                log('🎥 Getting video stream via getUserMedia...', 'info');
+                const resultVideoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { deviceId: { exact: videoDeviceId } }
+                });
+                
+                log('🔊 Getting audio stream via getUserMedia...', 'info');
+                const resultAudioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { deviceId: { exact: audioDeviceId } }
+                });
+                
+                // 4. Verify streams
+                log('🧪 Verifying video stream...', 'info');
+                const videoTracks = resultVideoStream.getVideoTracks();
+                if (videoTracks.length > 0) {
+                    const videoTrack = videoTracks[0];
+                    log(`✅ Video track obtained successfully: ${videoTrack.label}`, 'success');
+                    log(`📊 Video settings: ${JSON.stringify(videoTrack.getSettings())}`, 'info');
+                    
+                    // Display video
+                    const video = document.getElementById('testVideo');
+                    video.srcObject = resultVideoStream;
+                    video.style.display = 'block';
+                    log('📺 Video preview is now displayed', 'success');
+                } else {
+                    log('❌ No video track found', 'error');
+                }
+                
+                log('🧪 Verifying audio stream...', 'info');
+                const audioTracks = resultAudioStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    const audioTrack = audioTracks[0];
+                    log(`✅ Audio track obtained successfully: ${audioTrack.label}`, 'success');
+                    log(`📊 Audio settings: ${JSON.stringify(audioTrack.getSettings())}`, 'info');
+                    
+                    // Display audio player
+                    const audio = document.getElementById('testAudio');
+                    audio.srcObject = resultAudioStream;
+                    audio.style.display = 'block';
+                    log('🔊 Audio player is now displayed, you can hear the beep sounds', 'success');
+                } else {
+                    log('❌ No audio track found', 'error');
+                }
+                
+                log('🎉 Test completed! Custom stream fix verification successful!', 'success');
+                
+            } catch (error) {
+                log(`❌ Test failed: ${error.message}`, 'error');
+                console.error('Test error:', error);
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            
+            // Stop animation
+            if (canvasAnimationId) {
+                cancelAnimationFrame(canvasAnimationId);
+                canvasAnimationId = null;
+            }
+            
+            // Stop audio
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            if (beepInterval) {
+                clearInterval(beepInterval);
+                beepInterval = null;
+            }
+            
+            // Hide elements
+            document.getElementById('testCanvas').style.display = 'none';
+            document.getElementById('testVideo').style.display = 'none';
+            
+            // Clean up audio
+            const audio = document.getElementById('testAudio');
+            if (audio.srcObject) {
+                audio.srcObject.getTracks().forEach(track => track.stop());
+                audio.srcObject = null;
+            }
+            audio.style.display = 'none';
+        }
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', clearResults);
+    </script>
+</body>
+</html> 

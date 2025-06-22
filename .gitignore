@@ -32,3 +32,4 @@ pids
 
 # Build files
 dist
+.idea

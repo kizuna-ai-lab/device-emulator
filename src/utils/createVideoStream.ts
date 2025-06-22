@@ -1,6 +1,16 @@
 import * as WorkerTimers from 'worker-timers';
 
 function createVideoStream(props: EmulatedDeviceMetaProps) {
+    // If custom stream exists, prioritize using the custom stream
+    if (props.customStream) {
+        const videoTracks = props.customStream.getVideoTracks();
+        if (videoTracks.length > 0) {
+            // Create new MediaStream containing only video tracks
+            return new MediaStream(videoTracks);
+        }
+    }
+
+    // Otherwise use default Canvas stream
     const canvas = document.createElement('canvas');
     const canvasFramePaintStartTime = new Date().getTime();
     const capabilities = (<InputDeviceInfo>props.device).getCapabilities();
