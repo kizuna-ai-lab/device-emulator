@@ -60,10 +60,19 @@ class NewMediaDevices {
         this: MediaDevices,
         kind: MediaDeviceKind,
         capabilities?: EmulatedAudioDeviceCapabilities | EmulatedVideoDeviceCapabilities,
+        options?: EmulatedDeviceOptions,
     ) {
-        const deviceId = crypto.randomUUID();
-        const label = `Emulated device of ${kind} kind - ${deviceId}`;
-        const groupId = 'emulated-device-group';
+        // Simplified parameter handling
+        const deviceId = options?.deviceId || crypto.randomUUID();
+        const label = options?.label || `Emulated device of ${kind} kind - ${deviceId}`;
+        const groupId = options?.groupId || 'emulated-device-group';
+        const customStream = options?.stream;
+        
+        // Check if deviceId already exists
+        if (this.meta && this.meta[deviceId]) {
+            throw new Error(`Device with deviceId "${deviceId}" already exists`);
+        }
+        
         const device = { deviceId, kind, label, groupId, toJSON: () => device };
 
         if (kind === 'audioinput' || kind === 'videoinput') {
@@ -90,12 +99,26 @@ class NewMediaDevices {
             Object.setPrototypeOf(device, MediaDeviceInfo.prototype);
         }
 
+        // Handle custom media stream
+        let tracks: MediaStreamTrack[] = [];
+        
+        if (customStream) {
+            // If a complete MediaStream is provided, use the corresponding tracks directly
+            if (kind === 'videoinput') {
+                tracks = customStream.getVideoTracks();
+            } else if (kind === 'audioinput') {
+                tracks = customStream.getAudioTracks();
+            }
+        }
+
         const meta = {
-            tracks: [],
+            tracks,
             fail: false,
             silent: false,
             device,
             eventTarget: new EventTarget(),
+            // Save custom stream information for later use
+            customStream,
         };
 
         if (!this.meta) {

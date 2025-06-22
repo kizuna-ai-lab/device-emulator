@@ -10,6 +10,11 @@ function App() {
   const [currentDevice, setCurrentDevice] = useState<MediaDeviceInfo | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [meta, setMeta] = useState<EmulatedDeviceMetaProps | null>(null);
+  const [customDeviceId, setCustomDeviceId] = useState<string>('');
+  const [customLabel, setCustomLabel] = useState<string>('');
+  const [customGroupId, setCustomGroupId] = useState<string>('');
+  const [useCustomValues, setUseCustomValues] = useState<boolean>(false);
+  const [groupIds, setGroupIds] = useState<string[]>([]);
 
   useEffect(() => {
     if(deviceListenerAdded){
@@ -38,22 +43,62 @@ function App() {
     updateMeta();
   }, [currentDevice]);
 
-
+  const updateGroupIds = async () => {
+    try {
+      const ids = await deviceEmulatorHelper.getEmulatedGroupIds();
+      setGroupIds(ids);
+    } catch (error) {
+      console.error('Failed to get group IDs:', error);
+    }
+  };
 
   const updateDevices = async () => {
     let devices = await navigator.mediaDevices.enumerateDevices();
     devices = devices?.filter(device => device.label?.includes('Emulated device of'));
     setDevices(devices);
+    await updateGroupIds();
   };
 
   const addDevice = async () => {
-    const newDeviceId = deviceEmulatorHelper.addDevice(deviceType);
-    if(!currentDevice){
-      const allDevices = await navigator.mediaDevices.enumerateDevices();
-      const newDevice = allDevices.find((d) => d.deviceId === newDeviceId);
-      if (newDevice) {
-        setCurrentDevice(newDevice);
+    try {
+      let newDeviceId: string;
+      
+      if (useCustomValues && (customDeviceId || customLabel || customGroupId)) {
+        // Check if device already exists
+        if (customDeviceId && deviceEmulatorHelper.deviceExists(customDeviceId)) {
+          alert(`Device with ID "${customDeviceId}" already exists!`);
+          return;
+        }
+        
+        newDeviceId = (deviceEmulatorHelper.addDevice as any)(
+          deviceType, 
+          undefined, // capabilities
+          {
+            deviceId: customDeviceId || undefined,
+            label: customLabel || undefined,
+            groupId: customGroupId || undefined
+          }
+        );
+      } else {
+        newDeviceId = deviceEmulatorHelper.addDevice(deviceType);
       }
+
+      if(!currentDevice){
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        const newDevice = allDevices.find((d) => d.deviceId === newDeviceId);
+        if (newDevice) {
+          setCurrentDevice(newDevice);
+        }
+      }
+
+      // Clear custom inputs after successful addition
+      if (useCustomValues) {
+        setCustomDeviceId('');
+        setCustomLabel('');
+        setCustomGroupId('');
+      }
+    } catch (error) {
+      alert(`Failed to add device: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -75,7 +120,6 @@ function App() {
     updateMeta();
   };
 
-
   const updateCurrentDevice = (deviceId: string) => {
     const current = devices.find((d) => d.deviceId === deviceId);
     if (current) {
@@ -91,7 +135,7 @@ function App() {
           <img src="https://assets.dyte.io/logo-outlined.png" alt="Logo" width="120" />
         </a>
         <h1 className="text-4xl font-bold text-center">Device Emulator Demo</h1>
-        <div className="border-b border-gray-900/10 p-5 flex gap-5 items-center justify-center">
+        <div className="border-b border-gray-900/10 p-5 flex flex-col gap-4 items-center justify-center">
             <div className="bg-gray-200 border border-gray-200 text-gray-700 flex shadow-sm rounded-md overflow-hidden">
               <select
                 className="selector"
@@ -109,7 +153,84 @@ function App() {
                 Add virtual device
               </button>
             </div>
+            
+            {/* Custom Device Options */}
+            <div className="bg-gray-100 p-4 rounded-md">
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="use-custom"
+                  checked={useCustomValues}
+                  onChange={(e) => setUseCustomValues(e.target.checked)}
+                />
+                <label htmlFor="use-custom" className="text-sm font-medium">
+                  Use custom device properties
+                </label>
+              </div>
+              
+              {useCustomValues && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="custom-id" className="block text-xs font-medium text-gray-700 mb-1">
+                      Custom Device ID (optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="custom-id"
+                      value={customDeviceId}
+                      onChange={(e) => setCustomDeviceId(e.target.value)}
+                      placeholder="e.g., my-custom-device-123"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="custom-label" className="block text-xs font-medium text-gray-700 mb-1">
+                      Custom Label (optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="custom-label"
+                      value={customLabel}
+                      onChange={(e) => setCustomLabel(e.target.value)}
+                      placeholder="e.g., My Custom Camera"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="custom-group-id" className="block text-xs font-medium text-gray-700 mb-1">
+                      Custom Group ID (optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="custom-group-id"
+                      value={customGroupId}
+                      onChange={(e) => setCustomGroupId(e.target.value)}
+                      placeholder="e.g., my-device-group"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Group IDs Display */}
+            {groupIds.length > 0 && (
+              <div className="bg-blue-50 p-3 rounded-md">
+                <h4 className="text-sm font-medium text-blue-800 mb-2">Current Group IDs:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {groupIds.map((groupId, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
+                    >
+                      {groupId}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
+          
           <div
             className="grid grid-cols-2 gap-4 mt-5 p-10"
             style={{gridTemplateRows: "auto 1fr"}}
